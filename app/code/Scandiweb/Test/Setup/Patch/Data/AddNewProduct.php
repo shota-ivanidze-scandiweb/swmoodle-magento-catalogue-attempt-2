@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Scandiweb\Test\Setup\Patch\Data;
 
+use Exception;
 use Magento\Catalog\Api\CategoryLinkManagementInterface;
 use Magento\Catalog\Api\Data\ProductInterfaceFactory;
 use Magento\Catalog\Model\Product;
@@ -17,13 +18,18 @@ use Magento\Catalog\Model\Product\Attribute\Source\Status;
 use Magento\Catalog\Model\Product\Type;
 use Magento\Catalog\Model\Product\Visibility;
 use Magento\Framework\App\State;
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Exception\StateException;
 use Magento\Framework\Setup\Patch\DataPatchInterface;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Framework\Setup\ModuleDataSetupInterface;
 use Magento\Eav\Setup\EavSetup;
+use Magento\InventoryApi\Api\Data\SourceItemInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\InventoryApi\Api\Data\SourceItemInterfaceFactory;
 use Magento\InventoryApi\Api\SourceItemsSaveInterface;
+use Magento\Framework\Exception\CouldNotSaveException;
+use Magento\Framework\Exception\InputException;
 
 class AddNewProduct implements DataPatchInterface
 {
@@ -73,6 +79,11 @@ class AddNewProduct implements DataPatchInterface
     protected ProductInterfaceFactory $productInterfaceFactory;
 
     /**
+     * @var array
+     */
+    protected array $sourceItems;
+
+    /**
      * @param ModuleDataSetupInterface $setup
      * @param ProductRepositoryInterface $productRepository
      * @param State $appState
@@ -84,16 +95,17 @@ class AddNewProduct implements DataPatchInterface
      * @param CategoryLinkManagementInterface $categoryLink
      */
     public function __construct(
-        ModuleDataSetupInterface $setup,
-        ProductRepositoryInterface $productRepository,
-        State $appState,
-        StoreManagerInterface $storeManager,
-        ProductInterfaceFactory $productInterfaceFactory,
-        EavSetup $eavSetup,
-        SourceItemInterfaceFactory $sourceItemFactory,
-        SourceItemsSaveInterface $sourceItemsSaveInterface,
+        ModuleDataSetupInterface        $setup,
+        ProductRepositoryInterface      $productRepository,
+        State                           $appState,
+        StoreManagerInterface           $storeManager,
+        ProductInterfaceFactory         $productInterfaceFactory,
+        EavSetup                        $eavSetup,
+        SourceItemInterfaceFactory      $sourceItemFactory,
+        SourceItemsSaveInterface        $sourceItemsSaveInterface,
         CategoryLinkManagementInterface $categoryLink
-    ) {
+    )
+    {
         $this->appState = $appState;
         $this->productRepository = $productRepository;
         $this->productInterfaceFactory = $productInterfaceFactory;
@@ -106,22 +118,22 @@ class AddNewProduct implements DataPatchInterface
     }
 
     /**
-     * @return AddNewProduct|void
-     * @throws \Exception
+     * @return void
+     * @throws Exception
      */
-    public function apply()
+    public function apply(): void
     {
         $this->appState->emulateAreaCode('adminhtml', [$this, 'execute']);
     }
 
     /**
      * @return void
-     * @throws \Magento\Framework\Exception\CouldNotSaveException
-     * @throws \Magento\Framework\Exception\InputException
-     * @throws \Magento\Framework\Exception\LocalizedException
-     * @throws \Magento\Framework\Exception\StateException
+     * @throws CouldNotSaveException
+     * @throws InputException
+     * @throws LocalizedException
+     * @throws StateException
      */
-    public function execute()
+    public function execute(): void
     {
         $product = $this->productInterfaceFactory->create();
 
@@ -130,6 +142,7 @@ class AddNewProduct implements DataPatchInterface
         }
 
         $attributeSetId = $this->eavSetup->getAttributeSetId(Product::ENTITY, 'Default');
+        $websiteIDs = [$this->storeManager->getStore()->getWebsiteId()];
 
         $product->setTypeId(Type::TYPE_SIMPLE)
             ->setAttributeSetId($attributeSetId)
@@ -138,9 +151,22 @@ class AddNewProduct implements DataPatchInterface
             ->setUrlKey('griptrainer')
             ->setPrice(9.99)
             ->setVisibility(Visibility::VISIBILITY_BOTH)
-            ->setStatus(Status::STATUS_ENABLED);
+            ->setStatus(Status::STATUS_ENABLED)
+            ->setWebsiteIds($websiteIDs)
+            ->setStockData(['use_config_manage_stock' => 1, 'is_qty_decimal' => 0, 'is_in_stock' => 1]);
 
         $product = $this->productRepository->save($product);
+
+        // create a source item
+        $sourceItem = $this->sourceItemFactory->create();
+
+        $sourceItem->setSourceCode('default');
+        $sourceItem->setQuantity(100);
+        $sourceItem->setSku($product->getSku());
+        $sourceItem->setStatus(SourceItemInterface::STATUS_IN_STOCK);
+        $this->sourceItems[] = $sourceItem;
+
+        $this->sourceItemsSaveInterface->execute($this->sourceItems);
 
         $this->categoryLink->assignProductToCategories($product->getSku(), [2]);
     }
@@ -148,7 +174,7 @@ class AddNewProduct implements DataPatchInterface
     /**
      * @return array|string[]
      */
-    public static function getDependencies()
+    public static function getDependencies(): array
     {
         return [];
     }
@@ -156,7 +182,7 @@ class AddNewProduct implements DataPatchInterface
     /**
      * @return array|string[]
      */
-    public function getAliases()
+    public function getAliases(): array
     {
         return [];
     }
