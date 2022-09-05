@@ -95,17 +95,16 @@ class AddNewProduct implements DataPatchInterface
      * @param CategoryLinkManagementInterface $categoryLink
      */
     public function __construct(
-        ModuleDataSetupInterface        $setup,
-        ProductRepositoryInterface      $productRepository,
-        State                           $appState,
-        StoreManagerInterface           $storeManager,
-        ProductInterfaceFactory         $productInterfaceFactory,
-        EavSetup                        $eavSetup,
-        SourceItemInterfaceFactory      $sourceItemFactory,
-        SourceItemsSaveInterface        $sourceItemsSaveInterface,
+        ModuleDataSetupInterface $setup,
+        ProductRepositoryInterface $productRepository,
+        State $appState,
+        StoreManagerInterface $storeManager,
+        ProductInterfaceFactory $productInterfaceFactory,
+        EavSetup $eavSetup,
+        SourceItemInterfaceFactory $sourceItemFactory,
+        SourceItemsSaveInterface $sourceItemsSaveInterface,
         CategoryLinkManagementInterface $categoryLink
-    )
-    {
+    ) {
         $this->appState = $appState;
         $this->productRepository = $productRepository;
         $this->productInterfaceFactory = $productInterfaceFactory;
